@@ -62,6 +62,14 @@ fn matching_extensions_for(extension: &str) -> Vec<String> {
     match extension.to_ascii_lowercase().as_str() {
         "png" => vec!["png".to_string(), "jpg".to_string()],
         "jpg" | "jpeg" => vec!["png".to_string(), "jpg".to_string(), "jpeg".to_string()],
+        "mp4" | "mov" | "m4v" | "avi" => {
+            vec![
+                "mp4".to_string(),
+                "mov".to_string(),
+                "m4v".to_string(),
+                "avi".to_string(),
+            ]
+        }
         other => vec![other.to_string()],
     }
 }
@@ -116,6 +124,99 @@ mod tests {
             .expect("failed to determine output path");
 
         assert_eq!(output, target_dir.join("photo3.jpg"));
+
+        fs::remove_dir_all(target_dir).expect("failed to clean up temp dir");
+    }
+
+    #[test]
+    fn next_output_path_uses_highest_jpeg_or_png_index() {
+        let target_dir = unique_temp_dir();
+        fs::create_dir_all(&target_dir).expect("failed to create temp dir");
+        create_file(&target_dir.join("snapshot1.png"));
+        create_file(&target_dir.join("snapshot4.jpg"));
+        create_file(&target_dir.join("snapshot8.jpeg"));
+
+        let output = next_output_path(&target_dir, "snapshot", Path::new("/tmp/source.jpeg"))
+            .expect("failed to determine output path");
+
+        assert_eq!(output, target_dir.join("snapshot9.jpeg"));
+
+        fs::remove_dir_all(target_dir).expect("failed to clean up temp dir");
+    }
+
+    #[test]
+    fn next_output_path_keeps_jpeg_extension_when_family_is_mixed() {
+        let target_dir = unique_temp_dir();
+        fs::create_dir_all(&target_dir).expect("failed to create temp dir");
+        create_file(&target_dir.join("frame1.jpg"));
+        create_file(&target_dir.join("frame2.png"));
+
+        let output = next_output_path(&target_dir, "frame", Path::new("/tmp/source.jpeg"))
+            .expect("failed to determine output path");
+
+        assert_eq!(output, target_dir.join("frame3.jpeg"));
+
+        fs::remove_dir_all(target_dir).expect("failed to clean up temp dir");
+    }
+
+    #[test]
+    fn next_output_path_uses_highest_mp4_or_mov_index() {
+        let target_dir = unique_temp_dir();
+        fs::create_dir_all(&target_dir).expect("failed to create temp dir");
+        create_file(&target_dir.join("dive1.mov"));
+        create_file(&target_dir.join("dive2.mp4"));
+        create_file(&target_dir.join("dive9.mov"));
+
+        let output = next_output_path(&target_dir, "dive", Path::new("/tmp/source.mp4"))
+            .expect("failed to determine output path");
+
+        assert_eq!(output, target_dir.join("dive10.mp4"));
+
+        fs::remove_dir_all(target_dir).expect("failed to clean up temp dir");
+    }
+
+    #[test]
+    fn next_output_path_keeps_mov_extension_when_family_is_mixed() {
+        let target_dir = unique_temp_dir();
+        fs::create_dir_all(&target_dir).expect("failed to create temp dir");
+        create_file(&target_dir.join("reef1.mp4"));
+        create_file(&target_dir.join("reef2.mov"));
+
+        let output = next_output_path(&target_dir, "reef", Path::new("/tmp/source.mov"))
+            .expect("failed to determine output path");
+
+        assert_eq!(output, target_dir.join("reef3.mov"));
+
+        fs::remove_dir_all(target_dir).expect("failed to clean up temp dir");
+    }
+
+    #[test]
+    fn next_output_path_uses_highest_m4v_or_avi_index() {
+        let target_dir = unique_temp_dir();
+        fs::create_dir_all(&target_dir).expect("failed to create temp dir");
+        create_file(&target_dir.join("snorkel1.avi"));
+        create_file(&target_dir.join("snorkel2.m4v"));
+        create_file(&target_dir.join("snorkel8.mov"));
+
+        let output = next_output_path(&target_dir, "snorkel", Path::new("/tmp/source.avi"))
+            .expect("failed to determine output path");
+
+        assert_eq!(output, target_dir.join("snorkel9.avi"));
+
+        fs::remove_dir_all(target_dir).expect("failed to clean up temp dir");
+    }
+
+    #[test]
+    fn next_output_path_keeps_m4v_extension_when_family_is_mixed() {
+        let target_dir = unique_temp_dir();
+        fs::create_dir_all(&target_dir).expect("failed to create temp dir");
+        create_file(&target_dir.join("deep1.mp4"));
+        create_file(&target_dir.join("deep2.mov"));
+
+        let output = next_output_path(&target_dir, "deep", Path::new("/tmp/source.m4v"))
+            .expect("failed to determine output path");
+
+        assert_eq!(output, target_dir.join("deep3.m4v"));
 
         fs::remove_dir_all(target_dir).expect("failed to clean up temp dir");
     }
