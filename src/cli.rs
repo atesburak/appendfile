@@ -74,3 +74,67 @@ where
         persist_target,
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{parse_cli, CliAction};
+    use std::fs;
+    use std::path::PathBuf;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn unique_temp_dir() -> PathBuf {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system clock before unix epoch")
+            .as_nanos();
+        std::env::temp_dir().join(format!("appendfile-cli-test-{nanos}"))
+    }
+
+    #[test]
+    fn parses_explicit_target_and_positionals() {
+        let temp_dir = unique_temp_dir();
+        fs::create_dir_all(&temp_dir).expect("failed to create temp dir");
+        let input = temp_dir.join("source.png");
+        fs::write(&input, b"data").expect("failed to create input file");
+
+        let args = vec![
+            "--target".to_string(),
+            temp_dir.to_string_lossy().to_string(),
+            input.to_string_lossy().to_string(),
+            "ayca".to_string(),
+        ];
+
+        let action = parse_cli(args.into_iter()).expect("expected successful parse");
+
+        match action {
+            CliAction::Run {
+                input: parsed_input,
+                prefix,
+                target,
+                persist_target,
+            } => {
+                assert_eq!(parsed_input, input);
+                assert_eq!(prefix, "ayca");
+                assert_eq!(target, temp_dir);
+                assert!(persist_target);
+            }
+            CliAction::Help => panic!("unexpected help action"),
+        }
+
+        fs::remove_dir_all(temp_dir).expect("failed to clean up temp dir");
+    }
+
+    #[test]
+    fn rejects_missing_positional_arguments() {
+        let err = parse_cli(vec!["input-only".to_string()].into_iter())
+            .expect_err("expected parse error");
+        assert!(err.contains("expected positional arguments"));
+    }
+
+    #[test]
+    fn returns_help_for_help_flag() {
+        let action =
+            parse_cli(vec!["--help".to_string()].into_iter()).expect("expected help action");
+        assert!(matches!(action, CliAction::Help));
+    }
+}
