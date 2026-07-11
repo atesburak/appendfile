@@ -42,15 +42,23 @@ pub fn next_output_path(target_dir: &Path, prefix: &str, input: &Path) -> Result
 }
 
 fn parse_index(file_name: &str, prefix: &str, matching_extensions: &[String]) -> Option<u64> {
-    let stem = file_name.strip_prefix(prefix)?;
-    let stem = matching_extensions
+    let path = Path::new(file_name);
+
+    let extension = path.extension().and_then(|ext| ext.to_str())?;
+    if !matching_extensions
         .iter()
-        .find_map(|extension| stem.strip_suffix(&format!(".{extension}")))?;
-    if stem.is_empty() {
+        .any(|candidate| candidate.eq_ignore_ascii_case(extension))
+    {
         return None;
     }
 
-    let index = stem.parse::<u64>().ok()?;
+    let stem = path.file_stem().and_then(|stem| stem.to_str())?;
+    let index_str = stem.strip_prefix(prefix)?;
+    if index_str.is_empty() {
+        return None;
+    }
+
+    let index = index_str.parse::<u64>().ok()?;
     if index == 0 {
         return None;
     }
@@ -202,6 +210,20 @@ mod tests {
             .expect("failed to determine output path");
 
         assert_eq!(output, target_dir.join("snorkel9.avi"));
+
+        fs::remove_dir_all(target_dir).expect("failed to clean up temp dir");
+    }
+
+    #[test]
+    fn next_output_path_counts_uppercase_extension_case_insensitively() {
+        let target_dir = unique_temp_dir();
+        fs::create_dir_all(&target_dir).expect("failed to create temp dir");
+        create_file(&target_dir.join("ayca3.JPG"));
+
+        let output = next_output_path(&target_dir, "ayca", Path::new("/tmp/source.jpg"))
+            .expect("failed to determine output path");
+
+        assert_eq!(output, target_dir.join("ayca4.jpg"));
 
         fs::remove_dir_all(target_dir).expect("failed to clean up temp dir");
     }

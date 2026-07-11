@@ -57,6 +57,9 @@ where
     if prefix.is_empty() {
         return Err("prefix cannot be empty".to_string());
     }
+    if prefix.contains('/') || prefix.contains('\\') || prefix.contains("..") {
+        return Err("prefix must not contain path separators or \"..\"".to_string());
+    }
 
     let target = match target {
         Some(path) => path,
@@ -120,6 +123,24 @@ mod tests {
             }
             CliAction::Help => panic!("unexpected help action"),
         }
+
+        fs::remove_dir_all(temp_dir).expect("failed to clean up temp dir");
+    }
+
+    #[test]
+    fn rejects_prefix_with_path_traversal() {
+        let temp_dir = unique_temp_dir();
+        fs::create_dir_all(&temp_dir).expect("failed to create temp dir");
+        let input = temp_dir.join("source.png");
+        fs::write(&input, b"data").expect("failed to create input file");
+
+        let args = vec![
+            input.to_string_lossy().to_string(),
+            "../evil".to_string(),
+        ];
+
+        let err = parse_cli(args.into_iter()).expect_err("expected parse error");
+        assert!(err.contains("path separators"));
 
         fs::remove_dir_all(temp_dir).expect("failed to clean up temp dir");
     }
