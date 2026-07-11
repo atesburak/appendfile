@@ -12,26 +12,7 @@ pub fn run_with_target(
     target: PathBuf,
     persist_target: bool,
 ) -> Result<(), String> {
-    if persist_target {
-        save_target(&target)?;
-    }
-
-    fs::create_dir_all(&target).map_err(|err| {
-        format!(
-            "failed to create target directory {}: {err}",
-            target.display()
-        )
-    })?;
-
-    let output_path = crate::naming::next_output_path(&target, &prefix, &input)?;
-    crate::fileops::move_file(&input, &output_path)?;
-
-    println!("Input file: {}", input.display());
-    println!("Output prefix: {prefix}");
-    println!("Target folder: {}", target.display());
-    println!("Created file: {}", output_path.display());
-
-    Ok(())
+    run_with_target_impl(input, prefix, target, persist_target, None)
 }
 
 #[cfg(test)]
@@ -42,16 +23,26 @@ pub(crate) fn run_with_target_for_test(
     persist_target: bool,
     config_root_override: Option<&Path>,
 ) -> Result<(), String> {
-    if persist_target {
-        save_target_to(&target, config_root_override)?;
-    }
+    run_with_target_impl(input, prefix, target, persist_target, config_root_override)
+}
 
+fn run_with_target_impl(
+    input: PathBuf,
+    prefix: String,
+    target: PathBuf,
+    persist_target: bool,
+    config_root_override: Option<&Path>,
+) -> Result<(), String> {
     fs::create_dir_all(&target).map_err(|err| {
         format!(
             "failed to create target directory {}: {err}",
             target.display()
         )
     })?;
+
+    if persist_target {
+        save_target_to(&target, config_root_override)?;
+    }
 
     let output_path = crate::naming::next_output_path(&target, &prefix, &input)?;
     crate::fileops::move_file(&input, &output_path)?;
@@ -62,10 +53,6 @@ pub(crate) fn run_with_target_for_test(
     println!("Created file: {}", output_path.display());
 
     Ok(())
-}
-
-pub fn save_target(target: &Path) -> Result<(), String> {
-    save_target_to(target, None)
 }
 
 pub fn load_saved_target() -> Result<Option<PathBuf>, String> {
