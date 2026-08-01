@@ -1,7 +1,7 @@
 use std::env;
 use std::path::PathBuf;
 
-pub const USAGE: &str = "Usage: appendfile [--target <folder>] <input> <prefix>\n\nArguments:\n  <input>                Input media file (image or video)\n  <prefix>               Output file prefix\n\nOptions:\n  -t, --target <folder>  Set and remember target folder\n  -h, --help             Show this help message";
+pub const USAGE: &str = "Usage: appendfile [--target <folder>] <input> [prefix]\n\nArguments:\n  <input>                Input media file (image or video)\n  [prefix]               Output file prefix (defaults to the input file name with any trailing numbering removed)\n\nOptions:\n  -t, --target <folder>  Set and remember target folder\n  -h, --help             Show this help message";
 
 #[derive(Debug)]
 pub enum CliAction {
@@ -44,8 +44,8 @@ where
         }
     }
 
-    if positionals.len() != 2 {
-        return Err("expected positional arguments: <input> <prefix>".to_string());
+    if positionals.is_empty() || positionals.len() > 2 {
+        return Err("expected positional arguments: <input> [prefix]".to_string());
     }
 
     let input = PathBuf::from(&positionals[0]);
@@ -53,7 +53,10 @@ where
         return Err(format!("input file not found: {}", input.display()));
     }
 
-    let prefix = positionals[1].trim().to_string();
+    let prefix = match positionals.get(1) {
+        Some(explicit_prefix) => explicit_prefix.trim().to_string(),
+        None => crate::naming::derive_prefix_from_filename(&input)?,
+    };
     if prefix.is_empty() {
         return Err("prefix cannot be empty".to_string());
     }
@@ -147,9 +150,56 @@ mod tests {
 
     #[test]
     fn rejects_missing_positional_arguments() {
-        let err = parse_cli(vec!["input-only".to_string()].into_iter())
-            .expect_err("expected parse error");
+        let err = parse_cli(Vec::<String>::new().into_iter()).expect_err("expected parse error");
         assert!(err.contains("expected positional arguments"));
+    }
+
+    #[test]
+    fn rejects_too_many_positional_arguments() {
+        let err = parse_cli(
+            vec![
+                "input".to_string(),
+                "prefix".to_string(),
+                "extra".to_string(),
+            ]
+            .into_iter(),
+        )
+        .expect_err("expected parse error");
+        assert!(err.contains("expected positional arguments"));
+    }
+
+    #[test]
+    fn derives_prefix_from_input_file_name_when_omitted() {
+        let temp_dir = unique_temp_dir();
+        fs::create_dir_all(&temp_dir).expect("failed to create temp dir");
+        let input = temp_dir.join("ayca7.jpg");
+        fs::write(&input, b"data").expect("failed to create input file");
+
+        let args = vec![input.to_string_lossy().to_string()];
+
+        let action = parse_cli(args.into_iter()).expect("expected successful parse");
+
+        match action {
+            CliAction::Run { prefix, .. } => assert_eq!(prefix, "ayca"),
+            CliAction::Help => panic!("unexpected help action"),
+        }
+
+        fs::remove_dir_all(temp_dir).expect("failed to clean up temp dir");
+    }
+
+    #[test]
+    fn rejects_input_file_name_with_no_derivable_prefix() {
+        let temp_dir = unique_temp_dir();
+        fs::create_dir_all(&temp_dir).expect("failed to create temp dir");
+        let input = temp_dir.join("1234.jpg");
+        fs::write(&input, b"data").expect("failed to create input file");
+
+        let args = vec![input.to_string_lossy().to_string()];
+
+        let err = parse_cli(args.into_iter()).expect_err("expected parse error");
+        assert!(err.contains("could not derive a prefix"));
+
+        fs::remove_dir_all(temp_dir).expect("failed to clean up temp dir");
     }
 
     #[test]
