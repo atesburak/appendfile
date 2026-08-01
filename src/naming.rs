@@ -1,6 +1,23 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 
+pub fn derive_prefix_from_filename(input: &Path) -> Result<String, String> {
+    let stem = input
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .ok_or_else(|| format!("could not determine file name for: {}", input.display()))?;
+
+    let prefix = stem.trim_end_matches(|c: char| c.is_ascii_digit());
+    if prefix.is_empty() {
+        return Err(format!(
+            "could not derive a prefix from file name: {}",
+            input.display()
+        ));
+    }
+
+    Ok(prefix.to_string())
+}
+
 pub fn next_output_path(target_dir: &Path, prefix: &str, input: &Path) -> Result<PathBuf, String> {
     let extension = input
         .extension()
@@ -84,7 +101,7 @@ fn matching_extensions_for(extension: &str) -> Vec<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::next_output_path;
+    use super::{derive_prefix_from_filename, next_output_path};
     use std::fs;
     use std::path::{Path, PathBuf};
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -241,5 +258,33 @@ mod tests {
         assert_eq!(output, target_dir.join("deep3.m4v"));
 
         fs::remove_dir_all(target_dir).expect("failed to clean up temp dir");
+    }
+
+    #[test]
+    fn derive_prefix_from_filename_strips_trailing_digits() {
+        let prefix = derive_prefix_from_filename(Path::new("ayca7.jpg"))
+            .expect("failed to derive prefix");
+        assert_eq!(prefix, "ayca");
+    }
+
+    #[test]
+    fn derive_prefix_from_filename_keeps_internal_digits() {
+        let prefix = derive_prefix_from_filename(Path::new("IMG_1234.png"))
+            .expect("failed to derive prefix");
+        assert_eq!(prefix, "IMG_");
+    }
+
+    #[test]
+    fn derive_prefix_from_filename_keeps_name_without_trailing_digits() {
+        let prefix = derive_prefix_from_filename(Path::new("snapshot.png"))
+            .expect("failed to derive prefix");
+        assert_eq!(prefix, "snapshot");
+    }
+
+    #[test]
+    fn derive_prefix_from_filename_rejects_all_digit_name() {
+        let err = derive_prefix_from_filename(Path::new("1234.jpg"))
+            .expect_err("expected derive error");
+        assert!(err.contains("could not derive a prefix"));
     }
 }
